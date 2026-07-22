@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
 <title>The Matching Booth</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <style>
@@ -965,6 +966,9 @@
       if(!required){ err.textContent = "You'll need to check the first box to continue — it covers age and how your info is used for this event."; return; }
       err.textContent = "";
 
+      const btn = document.getElementById('consentBtn');
+      btn.disabled = true;
+
       // save everything collected so far as a pending record — payment navigates away from
       // this page entirely, so nothing held only in JS memory would survive the round trip
       pendingId = Date.now() + '-' + Math.random().toString(36).slice(2, 10);
@@ -976,6 +980,7 @@
 
       if(!PAYMENT_ENABLED){
         const code = await finalizeFromPending(pendingId);
+        btn.disabled = false;
         if(code){
           document.getElementById('codeDisplay').textContent = code;
           show('screen-codeReveal');
@@ -987,6 +992,7 @@
 
       document.getElementById('paymentErr').textContent = "";
       show('screen-payment');
+      btn.disabled = false;
     });
 
     document.getElementById('payBtn').addEventListener('click', async ()=>{
@@ -1054,6 +1060,7 @@
       stopStream();
       document.getElementById('codeInput').value = "";
       document.getElementById('codeErr').textContent = "";
+      document.getElementById('codeSubmitBtn').disabled = false;
       document.getElementById('snapBtn').disabled = false;
       document.getElementById('skipCamBtn').style.display = '';
       document.getElementById('shotCounter').textContent = "READY FOR 3 SHOTS";
@@ -1082,8 +1089,10 @@
       const code = document.getElementById('codeInput').value.trim();
       const err = document.getElementById('codeErr');
       if(!/^\d{6}$/.test(code)){ err.textContent = "Enter the 6-digit code from your phone."; return; }
+      const submitBtn = document.getElementById('codeSubmitBtn');
+      submitBtn.disabled = true;
       const raw = await storageGet('entry:' + code);
-      if(!raw){ err.textContent = "Code not found — double check the number."; return; }
+      if(!raw){ err.textContent = "Code not found — double check the number."; submitBtn.disabled = false; return; }
       err.textContent = "";
       bState.code = code;
       let entry = JSON.parse(raw);
@@ -1101,13 +1110,15 @@
           document.getElementById('loadingText').textContent = "Scanning the crowd for your match...";
           renderTicketFromEntry(entry);
           show('screen-result');
+          submitBtn.disabled = false;
           return;
         } else {
           const pw = await askPassword("This code has already been matched. Enter staff password to reprint:");
-          if(pw === null) return;
-          if(pw !== "Fullerton"){ err.textContent = "Incorrect password — reprint cancelled."; return; }
+          if(pw === null){ submitBtn.disabled = false; return; }
+          if(pw !== "2500"){ err.textContent = "Incorrect password — reprint cancelled."; submitBtn.disabled = false; return; }
           renderTicketFromEntry(entry);
           show('screen-result');
+          submitBtn.disabled = false;
           return;
         }
       }
@@ -1115,6 +1126,7 @@
       // duplicate/concurrent entry protection — block if another device is actively mid-flow with this code
       if(entry.processing && (Date.now() - entry.processing) < PROCESSING_LOCK_MS){
         err.textContent = "This code is already being used on another device right now — please wait a moment and try again.";
+        submitBtn.disabled = false;
         return;
       }
       entry.processing = Date.now();
@@ -1122,6 +1134,7 @@
 
       show('screen-camera');
       resetIdleTimer();
+      submitBtn.disabled = false;
       try{
         bState.stream = await navigator.mediaDevices.getUserMedia({video:{facingMode:"user"}, audio:false});
         document.getElementById('video').srcObject = bState.stream;
@@ -1363,7 +1376,7 @@
     document.getElementById('staffMenuLink').addEventListener('click', async ()=>{
       const pw = await askPassword("Enter the staff password to continue.");
       if(pw === null) return;
-      if(pw !== "Fullerton"){ await showAlert("Incorrect password."); return; }
+      if(pw !== "2500"){ await showAlert("Incorrect password."); return; }
       openStaffMenu();
     });
 
