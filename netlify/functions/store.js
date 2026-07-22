@@ -1,5 +1,18 @@
 const { getStore } = require('@netlify/blobs');
 
+function getMatchboothStore() {
+  // Prefer explicit credentials when provided — Netlify's automatic Blobs context
+  // (MissingBlobsEnvironmentError otherwise) doesn't reliably kick in on every deploy setup.
+  if (process.env.BLOBS_SITE_ID && process.env.BLOBS_TOKEN) {
+    return getStore({
+      name: 'matchbooth',
+      siteID: process.env.BLOBS_SITE_ID,
+      token: process.env.BLOBS_TOKEN,
+    });
+  }
+  return getStore('matchbooth');
+}
+
 exports.handler = async (event) => {
   if (event.httpMethod !== 'POST') {
     return { statusCode: 405, body: JSON.stringify({ error: 'Method not allowed' }) };
@@ -13,7 +26,13 @@ exports.handler = async (event) => {
   }
 
   const { op, key, value, prefix } = body;
-  const store = getStore('matchbooth');
+
+  let store;
+  try {
+    store = getMatchboothStore();
+  } catch (e) {
+    return { statusCode: 500, body: JSON.stringify({ error: 'Store init failed: ' + e.message }) };
+  }
 
   try {
     if (op === 'set') {

@@ -1,51 +1,19 @@
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 
-// Price in cents. $10.00 by default — change this to adjust the price guests pay.
-const PRICE_CENTS = 1000;
-
 exports.handler = async (event) => {
-  if (event.httpMethod !== 'POST') {
-    return { statusCode: 405, body: JSON.stringify({ error: 'Method not allowed' }) };
+  const sessionId = event.queryStringParameters && event.queryStringParameters.session_id;
+  if (!sessionId) {
+    return { statusCode: 400, body: JSON.stringify({ error: 'session_id required' }) };
   }
-
-  let body;
-  try {
-    body = JSON.parse(event.body || '{}');
-  } catch (e) {
-    return { statusCode: 400, body: JSON.stringify({ error: 'Invalid JSON' }) };
-  }
-
-  const { pendingId } = body;
-  if (!pendingId) {
-    return { statusCode: 400, body: JSON.stringify({ error: 'pendingId required' }) };
-  }
-
-  const origin = event.headers.origin || `https://${event.headers.host}`;
 
   try {
-    const session = await stripe.checkout.sessions.create({
-      mode: 'payment',
-      payment_method_types: ['card'],
-      line_items: [
-        {
-          price_data: {
-            currency: 'usd',
-            product_data: { name: 'Match Booth — Get Matched' },
-            unit_amount: PRICE_CENTS,
-          },
-          quantity: 1,
-        },
-      ],
-      success_url: `${origin}/?mode=phone&paid=1&session_id={CHECKOUT_SESSION_ID}&pid=${encodeURIComponent(pendingId)}`,
-      cancel_url: `${origin}/?mode=phone&paid=0&pid=${encodeURIComponent(pendingId)}`,
-    });
-
+    const session = await stripe.checkout.sessions.retrieve(sessionId);
     return {
       statusCode: 200,
-      body: JSON.stringify({ url: session.url }),
+      body: JSON.stringify({ paid: session.payment_status === 'paid' }),
       headers: { 'Content-Type': 'application/json' },
     };
   } catch (e) {
-    return { statusCode: 500, body: JSON.stringify({ error: e.message }) };
+    return { statusCode: 500, body: JSON.stringify({ error: e.message, paid: false }) };
   }
 };
