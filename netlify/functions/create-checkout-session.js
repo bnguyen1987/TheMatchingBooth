@@ -15,10 +15,11 @@ exports.handler = async (event) => {
     return { statusCode: 400, body: JSON.stringify({ error: 'Invalid JSON' }) };
   }
 
-  const { pendingId } = body;
+  const { pendingId, eventId } = body;
   if (!pendingId) {
     return { statusCode: 400, body: JSON.stringify({ error: 'pendingId required' }) };
   }
+  const safeEventId = encodeURIComponent(eventId || 'default');
 
   const origin = event.headers.origin || `https://${event.headers.host}`;
 
@@ -30,14 +31,14 @@ exports.handler = async (event) => {
         {
           price_data: {
             currency: 'usd',
-            product_data: { name: 'Match Booth — Get Matched' },
+            product_data: { name: 'The Matching Booth — Get Matched' },
             unit_amount: PRICE_CENTS,
           },
           quantity: 1,
         },
       ],
-      success_url: `${origin}/?mode=phone&paid=1&session_id={CHECKOUT_SESSION_ID}&pid=${encodeURIComponent(pendingId)}`,
-      cancel_url: `${origin}/?mode=phone&paid=0&pid=${encodeURIComponent(pendingId)}`,
+      success_url: `${origin}/?mode=phone&event=${safeEventId}&paid=1&session_id={CHECKOUT_SESSION_ID}&pid=${encodeURIComponent(pendingId)}`,
+      cancel_url: `${origin}/?mode=phone&event=${safeEventId}&paid=0&pid=${encodeURIComponent(pendingId)}`,
     });
 
     return {
