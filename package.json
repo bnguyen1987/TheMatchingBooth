@@ -1,9 +1,1518 @@
-{
-  "name": "matchbooth-functions",
-  "version": "1.0.0",
-  "private": true,
-  "dependencies": {
-    "stripe": "^16.0.0",
-    "@netlify/blobs": "^7.0.0"
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+<title>The Matching Booth</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Bungee&family=Dancing+Script:wght@600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap');
+
+  :root{
+    --night:#140f28;
+    --night2:#1f1840;
+    --hotpink:#ff4d8d;
+    --amber:#ffb627;
+    --teal:#2fe6c7;
+    --ticket:#fbf3df;
+    --ink:#241a3d;
   }
-}
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;min-height:100%;}
+  body{
+    font-family:'Space Grotesk', sans-serif;
+    background:
+      radial-gradient(circle at 20% 10%, rgba(255,77,141,0.25), transparent 40%),
+      radial-gradient(circle at 80% 90%, rgba(47,230,199,0.2), transparent 45%),
+      var(--night);
+    color:var(--ticket);
+    min-height:100vh;
+    display:flex;
+    align-items:flex-start;
+    justify-content:center;
+    padding:24px;
+  }
+
+  .booth{
+    position:relative;
+    width:100%;
+    max-width:480px;
+    background:var(--night2);
+    border-radius:18px;
+    padding:28px 24px 24px;
+    box-shadow:0 30px 60px rgba(0,0,0,0.5);
+    overflow:hidden;
+  }
+  .bulbs{
+    position:absolute; inset:0; pointer-events:none;
+    padding:6px;
+    opacity:.9;
+  }
+  .bulbs::before, .bulbs::after{
+    content:"";
+    position:absolute; left:0; right:0; height:14px;
+    background-image: radial-gradient(circle, var(--amber) 3.5px, transparent 4px);
+    background-size:24px 14px;
+    animation: blink 1.4s infinite steps(2);
+  }
+  .bulbs::before{ top:6px; }
+  .bulbs::after{ bottom:6px; animation-delay:.7s; }
+  @keyframes blink{ 50%{ opacity:.25; } }
+
+  .content{ position:relative; z-index:1; }
+
+  .eyebrow{
+    font-size:11px; letter-spacing:.18em; text-transform:uppercase;
+    color:var(--teal); text-align:center; margin-bottom:6px;
+  }
+  h1.title{
+    font-family:'Dancing Script', cursive;
+    font-weight:700;
+    font-size:clamp(34px,9vw,46px);
+    color:var(--amber);
+    text-align:center;
+    margin:0 0 4px;
+    text-shadow: 0 0 18px rgba(255,182,39,.35);
+    line-height:1.15;
+  }
+  .sub{ text-align:center; color:#cfc7e8; font-size:14px; margin-bottom:20px; }
+
+  .screen{ display:none; }
+  .screen.active{ display:block; }
+  #phoneApp, #boothApp{ display:none; }
+  #phoneApp.active, #boothApp.active{ display:block; }
+
+  button.primary{
+    width:100%;
+    background:var(--hotpink);
+    color:#1a0f22;
+    border:none;
+    font-family:'Space Grotesk',sans-serif;
+    font-weight:700;
+    font-size:16px;
+    padding:14px 18px;
+    border-radius:999px;
+    cursor:pointer;
+    transition: transform .12s ease, box-shadow .12s ease;
+    box-shadow: 0 8px 0 rgba(0,0,0,0.25);
+  }
+  button.primary:hover{ transform:translateY(-1px); }
+  button.primary:active{ transform:translateY(2px); box-shadow:0 4px 0 rgba(0,0,0,0.25); }
+  button.primary:disabled{ opacity:.4; cursor:not-allowed; }
+
+  button.ghost{
+    width:100%;
+    background:transparent;
+    color:var(--teal);
+    border:1.5px solid rgba(47,230,199,0.5);
+    font-family:'Space Grotesk',sans-serif;
+    font-weight:600;
+    font-size:14px;
+    padding:10px 16px;
+    border-radius:999px;
+    cursor:pointer;
+    margin-top:10px;
+  }
+
+  input.field, select.field{
+    width:100%;
+    padding:12px 14px;
+    border-radius:12px;
+    border:none;
+    font-size:16px;
+    font-family:'Space Grotesk',sans-serif;
+    margin-bottom:12px;
+    background:#2a2350;
+    color:var(--ticket);
+    display:block;
+  }
+  input.field::placeholder{ color:#9187b8; }
+  select.field{
+    -webkit-appearance:none;
+    appearance:none;
+    background-image: linear-gradient(45deg, transparent 50%, #9187b8 50%), linear-gradient(135deg, #9187b8 50%, transparent 50%);
+    background-position: calc(100% - 18px) center, calc(100% - 13px) center;
+    background-size: 5px 5px, 5px 5px;
+    background-repeat: no-repeat;
+    padding-right:34px;
+  }
+  select.field option{ background:#2a2350; color:var(--ticket); }
+  .fieldHint{ font-size:11px; color:#8a7cb8; margin:-8px 0 14px; }
+  .consentRow{
+    display:flex; align-items:flex-start; gap:10px;
+    background:rgba(255,255,255,0.04);
+    border:1.5px solid rgba(255,255,255,0.1);
+    border-radius:12px;
+    padding:12px 14px;
+    margin-bottom:12px;
+    cursor:pointer;
+  }
+  .consentRow input[type="checkbox"]{
+    width:18px; height:18px; margin-top:1px; flex-shrink:0; accent-color:var(--hotpink);
+  }
+  .consentRow span{ font-size:12.5px; line-height:1.5; color:var(--ticket); }
+
+  .camWrap{
+    position:relative;
+    width:100%;
+    aspect-ratio:1/1;
+    border-radius:14px;
+    overflow:hidden;
+    background:#000;
+    margin-bottom:16px;
+    border:3px solid var(--teal);
+  }
+  video{ width:100%; height:100%; object-fit:cover; display:block; }
+  .camNote{ font-size:12px; color:#9187b8; text-align:center; margin:-8px 0 16px; }
+  .shotCounter{
+    text-align:center; font-family:'Bungee',sans-serif; font-size:12px;
+    color:var(--amber); letter-spacing:.1em; margin-bottom:8px;
+  }
+  .countdownOverlay{
+    position:absolute; inset:0;
+    display:none;
+    align-items:center; justify-content:center;
+    background:rgba(20,15,40,0.35);
+  }
+  .countdownOverlay.show{ display:flex; }
+  .countdownOverlay .num{
+    font-family:'Bungee',sans-serif; font-size:88px; color:var(--ticket);
+    text-shadow:0 0 24px rgba(0,0,0,0.6);
+  }
+  .flash{
+    position:absolute; inset:0; background:#fff; opacity:0;
+    pointer-events:none;
+  }
+  .flash.go{ animation:flashPop .35s ease-out; }
+  @keyframes flashPop{ 0%{opacity:.9;} 100%{opacity:0;} }
+
+  .qBlock{ margin-bottom:18px; }
+  .qBlock h3{ font-size:15px; margin:0 0 10px; color:var(--ticket); font-weight:600; }
+  .qBlock .count{ color:var(--amber); font-family:'Bungee',sans-serif; font-size:12px; }
+  .opts{ display:flex; flex-direction:column; gap:8px; }
+  .opt{
+    text-align:left;
+    padding:12px 14px;
+    border-radius:12px;
+    border:1.5px solid rgba(255,255,255,0.12);
+    background:rgba(255,255,255,0.04);
+    color:var(--ticket);
+    cursor:pointer;
+    font-family:'Space Grotesk',sans-serif;
+    font-size:14px;
+    transition: all .12s ease;
+  }
+  .opt:hover{ border-color:var(--hotpink); }
+  .opt.selected{ border-color:var(--hotpink); background:rgba(255,77,141,0.18); }
+
+  .loadingWrap{ text-align:center; padding:30px 0; }
+  .spinner{
+    width:54px; height:54px; margin:0 auto 18px;
+    border-radius:50%;
+    border:4px solid rgba(255,255,255,0.15);
+    border-top-color:var(--hotpink);
+    animation:spin 0.9s linear infinite;
+  }
+  @keyframes spin{ to{ transform:rotate(360deg); } }
+  .loadingWrap p{ color:#cfc7e8; font-size:14px; }
+
+  /* QR + code entry (booth home) */
+  .qrBox{
+    background:var(--ticket);
+    border-radius:12px;
+    padding:16px;
+    display:flex;
+    justify-content:center;
+    margin-bottom:14px;
+  }
+  .codeRow{ display:flex; gap:8px; margin-bottom:6px; }
+  .codeRow input{ text-align:center; letter-spacing:.3em; font-size:20px; font-family:'Bungee',sans-serif; }
+  .divider{ display:flex; align-items:center; gap:10px; margin:18px 0; color:#786c9e; font-size:11px; text-transform:uppercase; letter-spacing:.12em; }
+  .divider::before, .divider::after{ content:""; flex:1; height:1px; background:rgba(255,255,255,0.12); }
+
+  /* the big code reveal on phone */
+  .codeDisplay{
+    text-align:center;
+    font-family:'Bungee',sans-serif;
+    font-size:52px;
+    letter-spacing:.12em;
+    color:var(--amber);
+    background:rgba(255,182,39,0.08);
+    border:2px dashed rgba(255,182,39,0.5);
+    border-radius:14px;
+    padding:22px 10px;
+    margin-bottom:16px;
+    text-shadow:0 0 20px rgba(255,182,39,.3);
+  }
+
+  .priceCard{
+    text-align:center;
+    background:rgba(255,255,255,0.04);
+    border:1.5px solid rgba(255,255,255,0.12);
+    border-radius:14px;
+    padding:24px 16px;
+    margin-bottom:16px;
+  }
+  .priceAmount{
+    font-family:'Bungee',sans-serif;
+    font-size:40px;
+    color:var(--amber);
+    text-shadow:0 0 20px rgba(255,182,39,.3);
+  }
+  .priceNote{ font-size:12.5px; color:#cfc7e8; margin-top:8px; line-height:1.5; }
+
+  /* the printed ticket */
+  .ticketsWrap{ display:flex; flex-direction:column; gap:22px; }
+  .filmstrip{
+    background: linear-gradient(135deg, var(--hotpink), var(--amber));
+    padding:3px;
+    border-radius:18px;
+    box-shadow: 0 14px 30px rgba(0,0,0,0.4);
+    max-width:260px;
+    margin:0 auto;
+  }
+  .filmstripInner{
+    background:#fbf6ec;
+    border-radius:16px;
+    padding:22px 18px 22px;
+    position:relative;
+  }
+  .filmSparkle{
+    position:absolute;
+    top:10px;
+    font-size:15px;
+    color:var(--hotpink);
+    opacity:.75;
+  }
+  .filmSparkle.left{ left:12px; }
+  .filmSparkle.right{ right:12px; transform:rotate(25deg); }
+  .filmBrand{
+    text-align:center;
+    font-family:'Dancing Script', cursive;
+    font-weight:700;
+    font-size:25px;
+    letter-spacing:.01em;
+    color:var(--ink);
+    margin-bottom:6px;
+  }
+  .filmBrandRule{
+    width:64px;
+    height:3px;
+    margin:0 auto 18px;
+    background:linear-gradient(90deg, var(--hotpink), var(--amber));
+    border-radius:3px;
+  }
+  .filmPhotos{ display:flex; flex-direction:column; gap:12px; }
+  .filmPhoto{
+    width:100%;
+    aspect-ratio:1/1;
+    object-fit:cover;
+    display:block;
+    border-radius:3px;
+    background:#e4ddc8;
+    border:5px solid #ffffff;
+    box-shadow:0 5px 12px rgba(0,0,0,0.18);
+  }
+  .filmPhotos .filmPhoto:nth-child(1){ transform:rotate(-1.5deg); }
+  .filmPhotos .filmPhoto:nth-child(2){ transform:rotate(1deg); }
+  .filmPhotos .filmPhoto:nth-child(3){ transform:rotate(-1deg); }
+  .filmDivider{
+    position:relative;
+    text-align:center;
+    margin:18px 0 12px;
+    color:var(--hotpink);
+    font-size:13px;
+  }
+  .filmDivider::before, .filmDivider::after{
+    content:"";
+    position:absolute;
+    top:50%;
+    width:34%;
+    height:1px;
+    background:rgba(36,26,61,0.18);
+  }
+  .filmDivider::before{ left:0; }
+  .filmDivider::after{ right:0; }
+  .filmCaption{ text-align:center; }
+  .filmCaption .fname{
+    font-family:'Space Grotesk',sans-serif;
+    font-weight:700;
+    font-size:15px;
+    color:var(--ink);
+  }
+  .filmCaption .fcontact{
+    font-size:11px;
+    color:#8a7a54;
+    word-break:break-word;
+    margin-top:3px;
+  }
+  .filmNote{
+    background:rgba(255,255,255,0.05);
+    border:1px dashed rgba(255,255,255,0.15);
+    border-radius:12px;
+    padding:14px;
+    text-align:center;
+    font-size:13px;
+    line-height:1.5;
+    color:#cfc7e8;
+  }
+  .ticketLabel{ text-align:center; font-size:11px; letter-spacing:.1em; text-transform:uppercase; color:#786c9e; margin-bottom:8px; }
+
+  .surpriseNote{
+    background:rgba(255,182,39,0.08);
+    border:2px dashed rgba(255,182,39,0.5);
+    border-radius:14px;
+    padding:18px 16px;
+    text-align:center;
+    font-size:14px;
+    line-height:1.5;
+    color:var(--ticket);
+  }
+  .guestHidden{ display:none; }
+
+  @media print{
+    body *{ visibility:hidden; }
+    #ticketsWrap, #ticketsWrap *{ visibility:visible; }
+    #ticketsWrap{ position:absolute; top:0; left:0; width:100%; margin:0; }
+    .filmstrip{ page-break-after:always; box-shadow:none; margin:0 auto; }
+    .filmstrip:last-of-type{ page-break-after:auto; }
+    .ticketLabel, .filmNote, .surpriseNote{ display:none; }
+    .guestHidden{ display:block; }
+  }
+
+  .actionsRow{ display:flex; gap:10px; margin-top:18px; }
+  .actionsRow button{ flex:1; }
+
+  .footNote{ text-align:center; font-size:11px; color:#786c9e; margin-top:16px; }
+  .errNote{ text-align:center; font-size:12px; color:var(--hotpink); margin:-6px 0 12px; min-height:14px; }
+  .staffLink{ display:block; text-align:center; font-size:11px; color:#463d70; margin-top:10px; cursor:pointer; text-decoration:underline; }
+  .modeSwitchLink{ display:block; text-align:center; font-size:11px; color:#463d70; margin-top:6px; cursor:pointer; text-decoration:underline; }
+
+  .privacyOverlay{
+    display:none;
+    position:fixed; inset:0;
+    background:rgba(10,7,20,0.75);
+    align-items:center; justify-content:center;
+    padding:20px;
+    z-index:50;
+  }
+  .privacyOverlay.show{ display:flex; }
+  .privacyCard{
+    background:var(--night2);
+    border-radius:16px;
+    max-width:420px;
+    width:100%;
+    max-height:80vh;
+    display:flex; flex-direction:column;
+    box-shadow:0 20px 50px rgba(0,0,0,0.5);
+  }
+  .privacyHead{
+    display:flex; align-items:center; justify-content:space-between;
+    padding:16px 18px;
+    border-bottom:1px solid rgba(255,255,255,0.1);
+    font-size:14px;
+  }
+  .privacyHead span{ cursor:pointer; color:#9187b8; font-size:16px; }
+  .privacyBody{ padding:16px 18px; overflow-y:auto; font-size:12.5px; line-height:1.6; color:#cfc7e8; }
+  .privacyBody p{ margin:0 0 12px; }
+  .privacyBody strong{ color:var(--ticket); }
+</style>
+</head>
+<body>
+
+<div class="booth">
+  <div class="bulbs"></div>
+  <div class="content">
+
+    <h1 class="title">The Matching Booth</h1>
+
+    <!-- ===================== BOOTH APP (runs on the booth's own screen) ===================== -->
+    <div id="boothApp">
+      <div class="sub">Enter your code to step into the booth.</div>
+
+      <!-- BOOTH HOME: QR + code entry -->
+      <div class="screen active" id="screen-boothHome">
+        <div class="ticketLabel" id="eventLabel">Event: default</div>
+        <div class="qrBox" id="qrBox"></div>
+        <div class="fieldHint" style="text-align:center;">Scan to fill out the matchmaking quiz on your phone first.</div>
+        <div class="divider">or enter your code</div>
+        <div class="codeRow">
+          <input class="field" id="codeInput" placeholder="6-DIGIT CODE" maxlength="6" inputmode="numeric">
+        </div>
+        <div class="errNote" id="codeErr"></div>
+        <button class="primary" id="codeSubmitBtn">Enter Booth →</button>
+      </div>
+
+      <!-- CAMERA -->
+      <div class="screen" id="screen-camera">
+        <div class="shotCounter" id="shotCounter">READY FOR 3 SHOTS</div>
+        <div class="camWrap" id="camWrap">
+          <video id="video" autoplay playsinline muted></video>
+          <div class="countdownOverlay" id="countdownOverlay"><div class="num" id="countdownNum">3</div></div>
+          <div class="flash" id="flashEl"></div>
+        </div>
+        <div class="camNote" id="camNote">We'll take 3 photos with a quick countdown between each — strike a new pose each time.</div>
+        <button class="primary" id="snapBtn">📸 Start Photos</button>
+        <button class="ghost" id="skipCamBtn">Skip camera, use placeholders</button>
+      </div>
+
+      <!-- LOADING -->
+      <div class="screen" id="screen-loading">
+        <div class="loadingWrap">
+          <div class="spinner"></div>
+          <p id="loadingText">Scanning tonight's crowd for your match...</p>
+        </div>
+      </div>
+
+      <!-- RESULT: TWO SEPARATE TICKETS (guest's, then their match's) -->
+      <div class="screen" id="screen-result">
+        <div class="ticketsWrap" id="ticketsWrap"></div>
+        <div class="actionsRow">
+          <button class="ghost" id="printBtn">🖨️ Print Both Tickets</button>
+          <button class="primary" id="nextGuestBtn">Next Guest →</button>
+        </div>
+      </div>
+
+      <span class="staffLink" id="staffMenuLink">Staff Menu</span>
+      <span class="modeSwitchLink" id="toPhonePreview">Preview guest phone flow (testing only)</span>
+    </div>
+
+    <!-- ===================== PHONE APP (what guests fill out on their own phone) ===================== -->
+    <div id="phoneApp">
+      <div class="sub">Answer a few questions, get your code, then head to the booth.</div>
+
+      <!-- SIGNUP -->
+      <div class="screen active" id="screen-signup">
+        <input class="field" id="nameInput" placeholder="First name" maxlength="20">
+
+        <select class="field" id="genderInput">
+          <option value="">Your gender (optional)</option>
+          <option value="Woman">Woman</option>
+          <option value="Man">Man</option>
+          <option value="Non-binary">Non-binary</option>
+        </select>
+        <select class="field" id="prefInput">
+          <option value="Everyone">Show me matches who are: Everyone</option>
+          <option value="Woman">Women</option>
+          <option value="Man">Men</option>
+          <option value="Non-binary">Non-binary</option>
+        </select>
+        <div class="fieldHint">Both optional — leave as-is if you don't want to filter, and we'll match you with anyone.</div>
+
+        <input class="field" id="emailInput" placeholder="Email (optional)" maxlength="60">
+        <input class="field" id="phoneInput" placeholder="Phone number (optional)" maxlength="30">
+        <input class="field" id="instaInput" placeholder="Instagram handle (optional)" maxlength="40">
+        <div class="fieldHint">Add at least one of the three above — this is what your match will use to reach you. It'll be printed on both tickets.</div>
+        <div class="errNote" id="signupErr"></div>
+        <button class="primary" id="signupBtn">Start the Quiz →</button>
+        <span class="modeSwitchLink" id="openPrivacyLink">Privacy &amp; how your info is used</span>
+      </div>
+
+      <!-- QUIZ -->
+      <div class="screen" id="screen-quiz">
+        <div id="quizArea"></div>
+        <button class="primary" id="quizNextBtn" disabled>Next</button>
+      </div>
+
+      <!-- CONSENT -->
+      <div class="screen" id="screen-consent">
+        <div class="fieldHint" style="margin-bottom:14px;">One last thing before we generate your code.</div>
+        <label class="consentRow">
+          <input type="checkbox" id="consentRequired">
+          <span>I confirm I'm 18 or older. I agree that my photo and quiz answers can be used for this event to find and print a match, and that my contact info will be printed on both tickets so my match can reach me.</span>
+        </label>
+        <label class="consentRow">
+          <input type="checkbox" id="consentSocial">
+          <span>It's also OK for The Matching Booth to post my photo on our social media.</span>
+        </label>
+        <div class="errNote" id="consentErr"></div>
+        <button class="primary" id="consentBtn">Get My Code →</button>
+        <span class="modeSwitchLink" id="openPrivacyLink2">Read our privacy notice</span>
+      </div>
+
+      <!-- PAYMENT -->
+      <div class="screen" id="screen-payment">
+        <div class="priceCard">
+          <div class="priceAmount">$10</div>
+          <div class="priceNote">Unlocks your match tonight — includes photos printed for both of you at the booth.</div>
+        </div>
+        <div class="errNote" id="paymentErr"></div>
+        <button class="primary" id="payBtn">Pay &amp; Get My Code →</button>
+        <div class="footNote">You'll be redirected to Stripe's secure checkout, then brought right back here.</div>
+      </div>
+
+      <!-- CODE REVEAL -->
+      <div class="screen" id="screen-codeReveal">
+        <div class="fieldHint" style="text-align:center; margin-bottom:6px;">Your code is ready</div>
+        <div class="codeDisplay" id="codeDisplay">------</div>
+        <div class="footNote">Remember this number (or screenshot it), then head to the booth and enter it there to take your photo and get matched.</div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- PRIVACY MODAL (overlay, works from any screen) -->
+  <div class="privacyOverlay" id="privacyOverlay">
+    <div class="privacyCard">
+      <div class="privacyHead">
+        <strong>Privacy &amp; how your info is used</strong>
+        <span id="privacyClose">✕</span>
+      </div>
+      <div class="privacyBody">
+        <p><strong>What we collect:</strong> your first name, your quiz answers, an optional gender and match preference, an optional email/phone/Instagram handle, and — once you reach the booth — your photos.</p>
+        <p><strong>How it's used:</strong> your quiz answers are compared with other guests' to generate a match. Your photos and contact info are printed on your ticket and your match's ticket so you can reach each other.</p>
+        <p><strong>Who can see it:</strong> only staff running the event and, on the printed ticket, the specific guest you're matched with. We don't sell your information.</p>
+        <p><strong>Social media:</strong> your photo is only posted publicly if you checked the separate opt-in box for it. You can decline that and still play.</p>
+        <p><strong>How long we keep it:</strong> event data is deleted after the event ends. If you'd like it deleted sooner, tell a staff member at the booth.</p>
+        <p><strong>Age:</strong> this experience is intended for guests 18 and older.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- STAFF MENU MODAL -->
+  <div class="privacyOverlay" id="staffOverlay">
+    <div class="privacyCard">
+      <div class="privacyHead">
+        <strong>Staff Menu</strong>
+        <span id="staffClose">✕</span>
+      </div>
+      <div class="privacyBody">
+        <div class="fieldHint" style="margin-top:0;">Current event: <strong id="staffCurrentEvent">default</strong></div>
+        <input class="field" id="staffEventInput" placeholder="New event name (e.g. venue-westwood)" maxlength="60">
+        <button class="ghost" id="staffSetEventBtn" style="margin-bottom:14px;">Set Event</button>
+        <button class="primary" id="staffResetBtn" style="margin-bottom:10px;">Reset Match Pool</button>
+        <button class="ghost" id="staffExportBtn">Export Event Data (CSV)</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- GENERIC MODAL (used for password prompts, confirmations, and alerts —
+       in-page instead of native prompt()/confirm()/alert(), which can be silently
+       blocked in sandboxed preview environments) -->
+  <div class="privacyOverlay" id="genericOverlay">
+    <div class="privacyCard">
+      <div class="privacyHead">
+        <strong id="genericTitle">Notice</strong>
+        <span id="genericClose">✕</span>
+      </div>
+      <div class="privacyBody" id="genericBody"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+
+  // ---------- Storage helper: backed by a Netlify Function + Netlify Blobs (real, persists
+  // across devices — window.storage was only ever a Claude-artifact-preview feature and does
+  // not exist on a real deployed site) ----------
+  const STORE_ENDPOINT = '/.netlify/functions/store';
+
+  async function storeCall(payload){
+    try{
+      const res = await fetch(STORE_ENDPOINT, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      if(res.status === 404) return null;
+      if(!res.ok) return null;
+      return await res.json();
+    }catch(e){
+      console.error('storage call failed', e);
+      return null;
+    }
+  }
+
+  async function storageSet(key, value){
+    return await storeCall({ op:'set', key, value });
+  }
+  async function storageList(prefix){
+    const r = await storeCall({ op:'list', prefix });
+    return r ? r.keys : [];
+  }
+  async function storageGet(key){
+    const r = await storeCall({ op:'get', key });
+    return r ? r.value : null;
+  }
+  async function storageDelete(key){
+    await storeCall({ op:'delete', key });
+  }
+
+  // ---------- Quiz definition ----------
+  const QUESTIONS = [
+    { q:"Friday night, you're probably...", opts:[
+      {label:"Dancing until the lights come up", tags:["high-energy","spontaneous","night-owl"]},
+      {label:"Deep conversation in a corner", tags:["low-key","sincere","introspective"]},
+      {label:"People-watching with snacks", tags:["low-key","playful","observant"]},
+      {label:"Already home in pajamas", tags:["low-key","planner","cozy"]},
+    ]},
+    { q:"Pick a red flag you secretly like:", opts:[
+      {label:"Chronically late", tags:["spontaneous","chaotic-good"]},
+      {label:"Way too many opinions on pizza toppings", tags:["playful","opinionated"]},
+      {label:"Talks to strangers everywhere", tags:["high-energy","main-character"]},
+      {label:"Cries at commercials", tags:["sincere","romantic"]},
+    ]},
+    { q:"Your love language at an event like this:", opts:[
+      {label:"Sharing their water / snacks", tags:["sincere","caretaker"]},
+      {label:"Holding your spot in line", tags:["planner","loyal"]},
+      {label:"Hyping your fit before you even ask", tags:["playful","main-character"]},
+      {label:"Making you a mixtape after", tags:["romantic","sincere"]},
+    ]},
+    { q:"Pick one:", opts:[
+      {label:"Spontaneous road trip, no map", tags:["spontaneous","chaotic-good"]},
+      {label:"A real 5-year plan", tags:["planner","sincere"]},
+      {label:"Neither — vibes only", tags:["low-key","playful"]},
+      {label:"A spreadsheet for the road trip", tags:["planner","opinionated"]},
+    ]},
+    { q:"Which sounds more like you?", opts:[
+      {label:"The sun", tags:["high-energy","main-character"]},
+      {label:"The moon", tags:["low-key","introspective"]},
+      {label:"A disco ball", tags:["high-energy","playful"]},
+      {label:"Static on an old TV", tags:["chaotic-good","introspective"]},
+    ]},
+    { q:"Your ideal first date:", opts:[
+      {label:"Whatever's happening right now, right here", tags:["spontaneous","chaotic-good"]},
+      {label:"Something with a reservation and a plan", tags:["planner","sincere"]},
+      {label:"Somewhere loud enough we don't have to talk yet", tags:["low-key","observant"]},
+      {label:"Somewhere I can show off a little", tags:["main-character","playful"]},
+    ]},
+    { q:"Group chat energy — you're the one who:", opts:[
+      {label:"Sends the 2am voice memo", tags:["chaotic-good","sincere"]},
+      {label:"Organizes the group and sends the calendar invite", tags:["planner","loyal"]},
+      {label:"Only shows up to roast everyone", tags:["playful","opinionated"]},
+      {label:"Reads everything, replies to nothing", tags:["low-key","observant"]},
+    ]},
+    { q:"Your idea of a perfect night out:", opts:[
+      {label:"Front row, dancing, losing my voice", tags:["high-energy","night-owl"]},
+      {label:"One good conversation, one good drink", tags:["low-key","sincere"]},
+      {label:"Wherever the group ends up at 1am", tags:["spontaneous","chaotic-good"]},
+      {label:"Home by 10 with something cozy on", tags:["cozy","planner"]},
+    ]},
+    { q:"How do you actually flirt?", opts:[
+      {label:"Relentless teasing", tags:["playful","opinionated"]},
+      {label:"Way too much unbroken eye contact", tags:["main-character","romantic"]},
+      {label:"Asking real questions and actually listening", tags:["sincere","caretaker"]},
+      {label:"I don't — they have to work for it", tags:["low-key","observant"]},
+    ]},
+    { q:"Pick a compliment you'd actually want:", opts:[
+      {label:"You're the most fun person here", tags:["high-energy","main-character"]},
+      {label:"You make everyone feel comfortable", tags:["caretaker","sincere"]},
+      {label:"I never know what you're going to say", tags:["chaotic-good","playful"]},
+      {label:"You always have a plan and it always works", tags:["planner","loyal"]},
+    ]}
+  ];
+
+  const TAG_PHRASE = {
+    "high-energy":"bring big main-stage energy",
+    "low-key":"would rather vibe than perform",
+    "spontaneous":"make plans only to break them together",
+    "planner":"already have the itinerary drafted",
+    "playful":"never stop joking around",
+    "sincere":"actually listen when the other one's talking",
+    "romantic":"believe in the mixtape gesture",
+    "chaotic-good":"cause exactly the right amount of trouble",
+    "night-owl":"come alive after midnight",
+    "main-character":"walk in like the credits are rolling",
+    "introspective":"save the good thoughts for 2am",
+    "caretaker":"always have a snack or a charger on hand",
+    "observant":"notice everything and say nothing",
+    "opinionated":"have a hot take loaded and ready",
+    "loyal":"hold the spot in line, literally and otherwise",
+    "cozy":"are secretly happiest at home"
+  };
+
+  const ARCHETYPES = {
+    "high-energy":"The Main Stage — you're the reason this event has a pulse.",
+    "low-key":"The Quiet Storm — everyone wants a piece of your calm.",
+    "spontaneous":"The Wildcard — no one knows what you'll do next, including you.",
+    "planner":"The Architect — chaos organizes itself around you.",
+    "playful":"The Icebreaker — rooms warm up when you walk in.",
+    "sincere":"The Anchor — people tell you things they haven't told anyone.",
+    "romantic":"The Hopeless Romantic — you still believe in the grand gesture.",
+    "chaotic-good":"Beautiful Chaos — trouble, but the fun kind.",
+    "night-owl":"The Night Shift — you peak when everyone else fades.",
+    "main-character":"The Main Character — obviously.",
+    "introspective":"The Deep End — you skip small talk on principle.",
+    "caretaker":"The Glue — you hold the group together without trying.",
+    "observant":"The Watcher — you clocked everything already.",
+    "opinionated":"The Debate Team — you have a take, and it's correct.",
+    "loyal":"The Ride-or-Die — once you're in, you're in.",
+    "cozy":"The Homebody — out tonight, home in your feelings by 11."
+  };
+
+  function jaccard(aTags, bTags){
+    const a = new Set(aTags), b = new Set(bTags);
+    const inter = [...a].filter(x=>b.has(x)).length;
+    const union = new Set([...a,...b]).size;
+    return union===0 ? 0 : inter/union;
+  }
+  function passesPreference(a, b){
+    // unspecified gender/preference on either side is treated as "no restriction" for that side
+    const aOk = !a.pref || a.pref === 'Everyone' || !b.gender || b.gender === a.pref;
+    const bOk = !b.pref || b.pref === 'Everyone' || !a.gender || a.gender === b.pref;
+    return aOk && bOk;
+  }
+  function pickArchetype(tags){
+    const counts = {};
+    tags.forEach(t=>counts[t]=(counts[t]||0)+1);
+    let best=null, bestCount=-1;
+    Object.entries(counts).forEach(([t,c])=>{ if(c>bestCount){best=t;bestCount=c;} });
+    return best;
+  }
+  function genCode(){
+    return String(Math.floor(100000 + Math.random()*900000));
+  }
+  function sanitizeName(s){
+    return String(s||'').replace(/[^a-zA-Z\u00C0-\u017F' \-]/g, '').trim().slice(0, 20);
+  }
+  function sanitizeInstagram(s){
+    return String(s||'').replace(/^@+/, '').replace(/[^a-zA-Z0-9._]/g, '').slice(0, 30);
+  }
+  function escapeHtml(str){
+    return String(str ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
+  function show(id){
+    document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
+    document.getElementById(id).classList.add('active');
+  }
+
+  // =========================================================
+  // PRIVACY MODAL (shared across both modes)
+  // =========================================================
+  function openPrivacy(){ document.getElementById('privacyOverlay').classList.add('show'); }
+  function closePrivacy(){ document.getElementById('privacyOverlay').classList.remove('show'); }
+  document.getElementById('privacyClose').addEventListener('click', closePrivacy);
+  document.getElementById('privacyOverlay').addEventListener('click', (e)=>{
+    if(e.target.id === 'privacyOverlay') closePrivacy();
+  });
+  ['openPrivacyLink','openPrivacyLink2'].forEach(id=>{
+    const el = document.getElementById(id);
+    if(el) el.addEventListener('click', openPrivacy);
+  });
+
+  // =========================================================
+  // GENERIC MODAL — in-page replacements for prompt()/confirm()/alert(),
+  // which can be silently blocked in sandboxed preview contexts.
+  // =========================================================
+  function genericShow(title, bodyHTML){
+    document.getElementById('genericTitle').textContent = title;
+    document.getElementById('genericBody').innerHTML = bodyHTML;
+    document.getElementById('genericOverlay').classList.add('show');
+  }
+  function genericHide(){
+    document.getElementById('genericOverlay').classList.remove('show');
+  }
+  document.getElementById('genericClose').addEventListener('click', genericHide);
+
+  function askPassword(message){
+    return new Promise(resolve=>{
+      genericShow("Staff Password", `
+        <div class="fieldHint" style="margin-bottom:12px;">${message}</div>
+        <input type="password" class="field" id="genericPwInput" placeholder="Password" autocomplete="off">
+        <button class="primary" id="genericPwOk">Continue</button>
+        <button class="ghost" id="genericPwCancel">Cancel</button>
+      `);
+      const input = document.getElementById('genericPwInput');
+      input.focus();
+      const onOk = ()=>{ cleanup(); resolve(input.value); };
+      const onCancel = ()=>{ cleanup(); resolve(null); };
+      const onKey = (e)=>{ if(e.key === 'Enter') onOk(); };
+      function cleanup(){
+        document.getElementById('genericPwOk').removeEventListener('click', onOk);
+        document.getElementById('genericPwCancel').removeEventListener('click', onCancel);
+        input.removeEventListener('keydown', onKey);
+        genericHide();
+      }
+      document.getElementById('genericPwOk').addEventListener('click', onOk);
+      document.getElementById('genericPwCancel').addEventListener('click', onCancel);
+      input.addEventListener('keydown', onKey);
+    });
+  }
+
+  function askConfirm(message){
+    return new Promise(resolve=>{
+      genericShow("Please Confirm", `
+        <div class="fieldHint" style="margin-bottom:12px;">${message}</div>
+        <button class="primary" id="genericConfirmOk">Yes, Continue</button>
+        <button class="ghost" id="genericConfirmCancel">Cancel</button>
+      `);
+      const onOk = ()=>{ cleanup(); resolve(true); };
+      const onCancel = ()=>{ cleanup(); resolve(false); };
+      function cleanup(){
+        document.getElementById('genericConfirmOk').removeEventListener('click', onOk);
+        document.getElementById('genericConfirmCancel').removeEventListener('click', onCancel);
+        genericHide();
+      }
+      document.getElementById('genericConfirmOk').addEventListener('click', onOk);
+      document.getElementById('genericConfirmCancel').addEventListener('click', onCancel);
+    });
+  }
+
+  function showAlert(message){
+    return new Promise(resolve=>{
+      genericShow("Notice", `
+        <div class="fieldHint" style="margin-bottom:12px;">${message}</div>
+        <button class="primary" id="genericAlertOk">OK</button>
+      `);
+      const onOk = ()=>{
+        document.getElementById('genericAlertOk').removeEventListener('click', onOk);
+        genericHide();
+        resolve();
+      };
+      document.getElementById('genericAlertOk').addEventListener('click', onOk);
+    });
+  }
+
+  // =========================================================
+  // MODE + EVENT DETECTION
+  // =========================================================
+  const params = new URLSearchParams(window.location.search);
+  const MODE = params.get('mode') === 'phone' ? 'phone' : 'booth';
+
+  // Every booth/link should include ?event=some-name so guests, matches, and staff actions
+  // stay scoped to that specific event/venue and never cross over with a different location.
+  // No ?event= present falls back to "default" so a single-booth setup keeps working unchanged.
+  function sanitizeEventId(s){
+    const cleaned = String(s||'').trim().toLowerCase().replace(/[^a-z0-9-]/g, '-').slice(0, 60);
+    return cleaned || 'default';
+  }
+  let EVENT_ID = sanitizeEventId(params.get('event'));
+
+  if(MODE === 'phone'){
+    document.getElementById('phoneApp').classList.add('active');
+    runPhoneApp();
+  } else {
+    document.getElementById('boothApp').classList.add('active');
+    runBoothApp();
+  }
+
+  // =========================================================
+  // PHONE APP
+  // =========================================================
+  function runPhoneApp(){
+    let pState = { name:"Guest", email:"", phone:"", instagram:"", gender:"", pref:"Everyone", answers:[], tags:[] };
+    let currentQ = 0;
+    let pendingId = null;
+
+    // ---- finalize: turn a paid pending record into a real entry + code ----
+    async function finalizeFromPending(pid){
+      const raw = await storageGet('pending:' + EVENT_ID + ':' + pid);
+      if(!raw) return null;
+      let data;
+      try{ data = JSON.parse(raw); } catch(e){ return null; }
+
+      let code, key, exists=true, tries=0;
+      do{
+        code = genCode();
+        key = 'entry:' + EVENT_ID + ':' + code;
+        const existing = await storageGet(key);
+        exists = !!existing;
+        tries++;
+      } while(exists && tries < 20);
+
+      const entry = {
+        code, name: data.name, email: data.email, phone: data.phone, instagram: data.instagram,
+        gender: data.gender, pref: data.pref,
+        tags: data.tags, photos:[], ts: Date.now(),
+        matchCode:null, matchName:null, matchContact:null, matchPhotos:null,
+        pct:null, blurb:null, solo:false, claimed:false,
+        ageConfirmed:true, socialOptIn: data.socialOptIn,
+        processing:null
+      };
+      await storageSet(key, JSON.stringify(entry));
+
+      const consentRecord = { code, ts: Date.now(), ageConfirmed: true, socialOptIn: data.socialOptIn };
+      await storageSet('consent:' + EVENT_ID + ':' + code + ':' + Date.now(), JSON.stringify(consentRecord));
+
+      await storageDelete('pending:' + EVENT_ID + ':' + pid);
+      return code;
+    }
+
+    // ---- handle returning from Stripe (success or cancel) before showing anything else ----
+    async function handlePaymentReturn(){
+      const params = new URLSearchParams(window.location.search);
+      const paid = params.get('paid');
+      const sessionId = params.get('session_id');
+      const pid = params.get('pid');
+      if(!pid) return false; // not a payment return — proceed with normal flow
+
+      pendingId = pid;
+
+      if(paid === '1' && sessionId){
+        document.getElementById('paymentErr').textContent = "";
+        const verifyRes = await fetch(`/.netlify/functions/verify-session?session_id=${encodeURIComponent(sessionId)}`)
+          .then(r => r.ok ? r.json() : { paid:false })
+          .catch(() => ({ paid:false }));
+
+        if(verifyRes.paid){
+          const code = await finalizeFromPending(pid);
+          if(code){
+            document.getElementById('codeDisplay').textContent = code;
+            show('screen-codeReveal');
+            return true;
+          }
+        }
+        // verification failed or pending record missing — let them retry payment
+        document.getElementById('paymentErr').textContent = "We couldn't verify that payment. Please try again.";
+        show('screen-payment');
+        return true;
+      }
+
+      // cancelled or came back without a completed session — offer to retry, quiz data still intact
+      document.getElementById('paymentErr').textContent = paid === '0'
+        ? "Payment was cancelled — you can try again when ready."
+        : "";
+      show('screen-payment');
+      return true;
+    }
+
+    document.getElementById('signupBtn').addEventListener('click', ()=>{
+      const name = sanitizeName(document.getElementById('nameInput').value);
+      const gender = document.getElementById('genderInput').value;
+      const pref = document.getElementById('prefInput').value;
+      const email = document.getElementById('emailInput').value.trim().slice(0, 60);
+      const phone = document.getElementById('phoneInput').value.trim().slice(0, 30);
+      const instagram = sanitizeInstagram(document.getElementById('instaInput').value);
+      const err = document.getElementById('signupErr');
+      if(!name){ err.textContent = "Enter your first name (letters only)."; return; }
+      if(!email && !phone && !instagram){ err.textContent = "Add an email, phone number, or Instagram handle so your match can reach you."; return; }
+      err.textContent = "";
+      pState.name = name; pState.email = email; pState.phone = phone; pState.instagram = instagram;
+      pState.gender = gender; pState.pref = pref;
+      currentQ = 0; pState.answers = [];
+      show('screen-quiz');
+      renderQuestion();
+    });
+
+    function renderQuestion(){
+      const qData = QUESTIONS[currentQ];
+      const area = document.getElementById('quizArea');
+      area.innerHTML = `
+        <div class="qBlock">
+          <div class="count">QUESTION ${currentQ+1} OF ${QUESTIONS.length}</div>
+          <h3>${qData.q}</h3>
+          <div class="opts">
+            ${qData.opts.map((o,i)=>`<button type="button" class="opt" data-idx="${i}">${o.label}</button>`).join('')}
+          </div>
+        </div>
+      `;
+      document.getElementById('quizNextBtn').disabled = true;
+      area.querySelectorAll('.opt').forEach(btn=>{
+        btn.addEventListener('click', ()=>{
+          area.querySelectorAll('.opt').forEach(b=>b.classList.remove('selected'));
+          btn.classList.add('selected');
+          document.getElementById('quizNextBtn').disabled = false;
+          document.getElementById('quizNextBtn').dataset.chosen = btn.dataset.idx;
+        });
+      });
+    }
+
+    document.getElementById('quizNextBtn').addEventListener('click', ()=>{
+      const idx = parseInt(document.getElementById('quizNextBtn').dataset.chosen, 10);
+      pState.answers.push(QUESTIONS[currentQ].opts[idx]);
+      currentQ++;
+      if(currentQ < QUESTIONS.length){
+        renderQuestion();
+      } else {
+        pState.tags = pState.answers.flatMap(a=>a.tags);
+        document.getElementById('consentRequired').checked = false;
+        document.getElementById('consentSocial').checked = false;
+        document.getElementById('consentErr').textContent = "";
+        show('screen-consent');
+      }
+    });
+
+    // Flip to true once Stripe keys are configured on Netlify. While false, guests skip
+    // straight from consent to their code — useful for testing the core flow first.
+    const PAYMENT_ENABLED = false;
+
+    document.getElementById('consentBtn').addEventListener('click', async ()=>{
+      const required = document.getElementById('consentRequired').checked;
+      const social = document.getElementById('consentSocial').checked;
+      const err = document.getElementById('consentErr');
+      if(!required){ err.textContent = "You'll need to check the first box to continue — it covers age and how your info is used for this event."; return; }
+      err.textContent = "";
+
+      const btn = document.getElementById('consentBtn');
+      btn.disabled = true;
+
+      // save everything collected so far as a pending record — payment navigates away from
+      // this page entirely, so nothing held only in JS memory would survive the round trip
+      pendingId = Date.now() + '-' + Math.random().toString(36).slice(2, 10);
+      const pendingData = {
+        name: pState.name, email: pState.email, phone: pState.phone, instagram: pState.instagram,
+        gender: pState.gender, pref: pState.pref, tags: pState.tags, socialOptIn: social
+      };
+      await storageSet('pending:' + EVENT_ID + ':' + pendingId, JSON.stringify(pendingData));
+
+      if(!PAYMENT_ENABLED){
+        const code = await finalizeFromPending(pendingId);
+        btn.disabled = false;
+        if(code){
+          document.getElementById('codeDisplay').textContent = code;
+          show('screen-codeReveal');
+        } else {
+          err.textContent = "Something went wrong generating your code — please try again.";
+        }
+        return;
+      }
+
+      document.getElementById('paymentErr').textContent = "";
+      show('screen-payment');
+      btn.disabled = false;
+    });
+
+    document.getElementById('payBtn').addEventListener('click', async ()=>{
+      const err = document.getElementById('paymentErr');
+      if(!pendingId){ err.textContent = "Something went wrong — please restart the quiz."; return; }
+      err.textContent = "";
+      document.getElementById('payBtn').disabled = true;
+      document.getElementById('payBtn').textContent = "Redirecting to payment...";
+
+      try{
+        const res = await fetch('/.netlify/functions/create-checkout-session', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ pendingId, eventId: EVENT_ID })
+        });
+        const data = await res.json();
+        if(data.url){
+          window.location.href = data.url;
+        } else {
+          throw new Error(data.error || 'No checkout URL returned');
+        }
+      }catch(e){
+        err.textContent = "Couldn't start checkout — please try again.";
+        document.getElementById('payBtn').disabled = false;
+        document.getElementById('payBtn').textContent = "Pay & Get My Code →";
+      }
+    });
+
+    handlePaymentReturn();
+  }
+
+  // =========================================================
+  // BOOTH APP
+  // =========================================================
+  function runBoothApp(){
+    let bState = { code:null, photos:[], stream:null };
+
+    const IDLE_TIMEOUT_MS = 60000; // reset to home screen after 60s of no interaction
+    let idleTimer = null;
+
+    function resetIdleTimer(){
+      if(idleTimer) clearTimeout(idleTimer);
+      idleTimer = setTimeout(handleIdleTimeout, IDLE_TIMEOUT_MS);
+    }
+
+    async function handleIdleTimeout(){
+      if(document.getElementById('screen-boothHome').classList.contains('active')) return; // already at rest
+      // release any in-progress lock on this code so it isn't stuck unusable for 90s
+      if(bState.code){
+        const raw = await storageGet('entry:' + EVENT_ID + ':' + bState.code);
+        if(raw){
+          try{
+            const d = JSON.parse(raw);
+            if(!d.photos || !d.photos.length){
+              d.processing = null;
+              await storageSet('entry:' + EVENT_ID + ':' + bState.code, JSON.stringify(d));
+            }
+          }catch(e){}
+        }
+      }
+      resetBoothToHome();
+    }
+
+    function resetBoothToHome(){
+      stopStream();
+      document.getElementById('codeInput').value = "";
+      document.getElementById('codeErr').textContent = "";
+      document.getElementById('codeSubmitBtn').disabled = false;
+      document.getElementById('snapBtn').disabled = false;
+      document.getElementById('skipCamBtn').style.display = '';
+      document.getElementById('shotCounter').textContent = "READY FOR 3 SHOTS";
+      document.getElementById('camNote').textContent = "We'll take 3 photos with a quick countdown between each — strike a new pose each time.";
+      bState = { code:null, photos:[], stream:null };
+      show('screen-boothHome');
+    }
+
+    ['click','touchstart','keydown'].forEach(evt => document.addEventListener(evt, resetIdleTimer));
+    resetIdleTimer();
+
+    function renderEventAndQR(){
+      document.getElementById('eventLabel').textContent = "Event: " + EVENT_ID;
+      const qrBox = document.getElementById('qrBox');
+      qrBox.innerHTML = "";
+      try{
+        const url = new URL(window.location.href);
+        url.searchParams.set('mode','phone');
+        url.searchParams.set('event', EVENT_ID);
+        new QRCode(qrBox, {
+          text: url.toString(),
+          width: 160, height: 160,
+          colorDark: "#241a3d", colorLight: "#fbf3df"
+        });
+      }catch(e){ qrBox.textContent = "QR unavailable — share the link manually."; }
+    }
+    renderEventAndQR();
+
+    const PROCESSING_LOCK_MS = 90000; // how long a code stays "claimed" by one device before it's considered abandoned
+
+    document.getElementById('codeSubmitBtn').addEventListener('click', async ()=>{
+      const code = document.getElementById('codeInput').value.trim();
+      const err = document.getElementById('codeErr');
+      if(!/^\d{6}$/.test(code)){ err.textContent = "Enter the 6-digit code from your phone."; return; }
+      const submitBtn = document.getElementById('codeSubmitBtn');
+      submitBtn.disabled = true;
+      const raw = await storageGet('entry:' + EVENT_ID + ':' + code);
+      if(!raw){ err.textContent = "Code not found — double check the number."; submitBtn.disabled = false; return; }
+      err.textContent = "";
+      bState.code = code;
+      let entry = JSON.parse(raw);
+
+      if(entry.photos && entry.photos.length){
+        if(entry.solo){
+          // they only got a solo reading last time — check whether a real match is available now
+          show('screen-loading');
+          document.getElementById('loadingText').textContent = "Checking for a new match...";
+          const result = await attemptMatch(entry);
+          if(result.matched){
+            entry = result.entry;
+            await storageSet('entry:' + EVENT_ID + ':' + code, JSON.stringify(entry));
+          }
+          document.getElementById('loadingText').textContent = "Scanning the crowd for your match...";
+          renderTicketFromEntry(entry);
+          show('screen-result');
+          submitBtn.disabled = false;
+          return;
+        } else {
+          const pw = await askPassword("This code has already been matched. Enter staff password to reprint:");
+          if(pw === null){ submitBtn.disabled = false; return; }
+          if(pw !== "2500"){ err.textContent = "Incorrect password — reprint cancelled."; submitBtn.disabled = false; return; }
+          renderTicketFromEntry(entry);
+          show('screen-result');
+          submitBtn.disabled = false;
+          return;
+        }
+      }
+
+      // duplicate/concurrent entry protection — block if another device is actively mid-flow with this code
+      if(entry.processing && (Date.now() - entry.processing) < PROCESSING_LOCK_MS){
+        err.textContent = "This code is already being used on another device right now — please wait a moment and try again.";
+        submitBtn.disabled = false;
+        return;
+      }
+      entry.processing = Date.now();
+      await storageSet('entry:' + EVENT_ID + ':' + code, JSON.stringify(entry));
+
+      show('screen-camera');
+      resetIdleTimer();
+      submitBtn.disabled = false;
+      try{
+        bState.stream = await navigator.mediaDevices.getUserMedia({video:{facingMode:"user"}, audio:false});
+        document.getElementById('video').srcObject = bState.stream;
+      }catch(e){
+        document.getElementById('camNote').textContent = "Camera not available — you can skip and use a placeholder.";
+      }
+    });
+
+    function stopStream(){
+      if(bState.stream){ bState.stream.getTracks().forEach(t=>t.stop()); bState.stream=null; }
+    }
+
+    function sleep(ms){ return new Promise(r=>setTimeout(r, ms)); }
+
+    async function runCountdown(){
+      const overlay = document.getElementById('countdownOverlay');
+      const numEl = document.getElementById('countdownNum');
+      overlay.classList.add('show');
+      for(const n of [3,2,1]){
+        numEl.textContent = n;
+        await sleep(700);
+      }
+      overlay.classList.remove('show');
+    }
+
+    function flashAndCapture(video){
+      const size = 320;
+      const canvas = document.createElement('canvas');
+      canvas.width = size; canvas.height = size;
+      const ctx = canvas.getContext('2d');
+      const vw = video.videoWidth, vh = video.videoHeight;
+      const side = Math.min(vw, vh);
+      ctx.drawImage(video, (vw-side)/2, (vh-side)/2, side, side, 0, 0, size, size);
+      const flashEl = document.getElementById('flashEl');
+      flashEl.classList.remove('go'); void flashEl.offsetWidth; flashEl.classList.add('go');
+      return canvas.toDataURL('image/jpeg', 0.6);
+    }
+
+    document.getElementById('snapBtn').addEventListener('click', async ()=>{
+      const video = document.getElementById('video');
+      if(!video.videoWidth){
+        document.getElementById('camNote').textContent = "Camera still loading, try again in a second, or skip.";
+        return;
+      }
+      document.getElementById('snapBtn').disabled = true;
+      document.getElementById('skipCamBtn').style.display = 'none';
+      bState.photos = [];
+      for(let i=1; i<=3; i++){
+        document.getElementById('shotCounter').textContent = `GET READY — SHOT ${i} OF 3`;
+        await runCountdown();
+        bState.photos.push(flashAndCapture(video));
+        document.getElementById('shotCounter').textContent = `SHOT ${i} OF 3 CAPTURED`;
+        await sleep(500);
+      }
+      stopStream();
+      finishBoothEntry();
+    });
+
+    document.getElementById('skipCamBtn').addEventListener('click', async ()=>{
+      stopStream();
+      const raw = await storageGet('entry:' + EVENT_ID + ':' + bState.code);
+      const entry = raw ? JSON.parse(raw) : {name:"Guest"};
+      const colors = ['#ff4d8d','#ffb627','#2fe6c7','#8a6bff'];
+      bState.photos = [0,1,2].map(i=>{
+        const c = colors[Math.floor(Math.random()*colors.length)];
+        const canvas = document.createElement('canvas');
+        canvas.width=320; canvas.height=320;
+        const ctx = canvas.getContext('2d');
+        ctx.fillStyle = c; ctx.fillRect(0,0,320,320);
+        ctx.fillStyle = "#1a0f22";
+        ctx.font = "bold 140px sans-serif";
+        ctx.textAlign="center"; ctx.textBaseline="middle";
+        ctx.fillText((entry.name && entry.name[0] || "G").toUpperCase(), 160, 175);
+        return canvas.toDataURL('image/jpeg',0.7);
+      });
+      finishBoothEntry();
+    });
+
+    async function attemptMatch(entry){
+      const keys = await storageList('entry:' + EVENT_ID + ':');
+      const others = [];
+      for(const k of keys){
+        if(k === 'entry:' + EVENT_ID + ':' + entry.code) continue;
+        const r = await storageGet(k);
+        if(r){
+          try{
+            const d = JSON.parse(r);
+            if(d.photos && d.photos.length) others.push({key:k, data:d}); // only match against people who've already taken their booth photos
+          }catch(e){}
+        }
+      }
+      if(others.length === 0) return {matched:false};
+
+      const unclaimed = others.filter(o => !o.data.claimed);
+      let pool = unclaimed.length ? unclaimed : others;
+
+      // apply gender preference filtering when both sides have specified enough info to check it,
+      // but never let it dead-end the match — fall back to the unfiltered pool if nothing passes.
+      const prefFiltered = pool.filter(o => passesPreference(entry, o.data));
+      if(prefFiltered.length) pool = prefFiltered;
+
+      let best=null, bestScore=-1;
+      pool.forEach(o=>{
+        const s = jaccard(entry.tags, o.data.tags);
+        if(s > bestScore){ bestScore = s; best = o; }
+      });
+      if(!best) return {matched:false};
+
+      const pct = Math.round(62 + bestScore*35);
+      const sharedTags = entry.tags.filter(t => best.data.tags.includes(t));
+      const uniqueShared = [...new Set(sharedTags)].slice(0,2);
+      let phrase1 = uniqueShared[0] ? TAG_PHRASE[uniqueShared[0]] : "somehow ended up on the same wavelength";
+      let phrase2 = uniqueShared[1] ? TAG_PHRASE[uniqueShared[1]] : null;
+      let blurb = `You both ${phrase1}` + (phrase2 ? `, and you both ${phrase2}` : "") + ".";
+      const matchContact = [best.data.email, best.data.phone, best.data.instagram ? '@'+best.data.instagram : null].filter(Boolean).join(" · ");
+
+      entry.solo = false;
+      entry.matchCode = best.data.code;
+      entry.matchName = best.data.name;
+      entry.matchContact = matchContact;
+      entry.matchPhotos = best.data.photos;
+      entry.pct = pct;
+      entry.blurb = blurb;
+
+      // mark the matched person as claimed so future guests prefer fresh pairings
+      best.data.claimed = true;
+      await storageSet(best.key, JSON.stringify(best.data));
+
+      return {matched:true, entry};
+    }
+
+    async function finishBoothEntry(){
+      show('screen-loading');
+      const raw = await storageGet('entry:' + EVENT_ID + ':' + bState.code);
+      const entry = JSON.parse(raw);
+      entry.photos = bState.photos;
+      entry.photoTs = Date.now();
+      entry.processing = null;
+
+      setTimeout(async ()=>{
+        const result = await attemptMatch(entry);
+        if(!result.matched){
+          const arch = pickArchetype(entry.tags);
+          entry.solo = true;
+          entry.blurb = ARCHETYPES[arch] || "A wildcard nobody's cracked yet.";
+        }
+        await storageSet('entry:' + EVENT_ID + ':' + bState.code, JSON.stringify(entry));
+        renderTicketFromEntry(entry);
+        show('screen-result');
+      }, 1600);
+    }
+
+    function ticketStripHTML(photos, name, contact){
+      const photoTags = (photos||[]).slice(0,3).map(p=>`<img class="filmPhoto" src="${p}">`).join('');
+      return `
+        <div class="filmstrip">
+          <div class="filmstripInner">
+            <div class="filmSparkle left">✦</div>
+            <div class="filmSparkle right">✦</div>
+            <div class="filmBrand">The Matching Booth</div>
+            <div class="filmBrandRule"></div>
+            <div class="filmPhotos">${photoTags}</div>
+            <div class="filmDivider">♥</div>
+            <div class="filmCaption">
+              <div class="fname">${name}</div>
+              <div class="fcontact">${contact}</div>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    function renderTicketFromEntry(entry){
+      const myContact = escapeHtml([entry.email, entry.phone, entry.instagram ? '@'+entry.instagram : null].filter(Boolean).join(" · "));
+      const myName = escapeHtml(entry.name);
+      const wrap = document.getElementById('ticketsWrap');
+
+      let html = `
+        <div class="ticketLabel">Your Photos</div>
+        ${ticketStripHTML(entry.photos, myName, myContact)}
+      `;
+
+      if(entry.solo){
+        html += `
+          <div class="filmNote">You're the first ticket in the machine tonight — come back once a few more people have played. For now:<br><br><b>${entry.blurb}</b></div>
+        `;
+      } else {
+        const matchName = escapeHtml(entry.matchName);
+        const matchContact = escapeHtml(entry.matchContact);
+        html += `
+          <div class="surpriseNote">✨ Your match is a surprise — grab your printed ticket to find out who it is!</div>
+          <div class="guestHidden">
+            <div class="ticketLabel">Ticket 2 of 2 — Your Match's Photos</div>
+            ${ticketStripHTML(entry.matchPhotos, matchName, matchContact)}
+          </div>
+        `;
+      }
+
+      wrap.innerHTML = html;
+    }
+
+    document.getElementById('printBtn').addEventListener('click', ()=>{ window.print(); });
+
+    document.getElementById('nextGuestBtn').addEventListener('click', ()=>{
+      resetBoothToHome();
+    });
+
+    function csvEscape(val){
+      const s = String(val ?? "");
+      return /[",\r\n]/.test(s) ? '"' + s.replace(/"/g,'""') + '"' : s;
+    }
+
+    async function exportEventCSV(){
+      const keys = await storageList('entry:' + EVENT_ID + ':');
+      const rows = [["code","name","gender","interested_in","email","phone","instagram",
+                      "age_confirmed","social_opt_in","status","match_name","match_contact",
+                      "compatibility_pct","timestamp"]];
+      for(const k of keys){
+        const r = await storageGet(k);
+        if(!r) continue;
+        let d;
+        try{ d = JSON.parse(r); } catch(e){ continue; }
+        const status = d.solo ? "solo" : ((d.photos && d.photos.length) ? "matched" : "quiz-only");
+        rows.push([
+          d.code||"", d.name||"", d.gender||"", d.pref||"",
+          d.email||"", d.phone||"", d.instagram||"",
+          d.ageConfirmed ? "yes" : "no", d.socialOptIn ? "yes" : "no",
+          status, d.matchName||"", d.matchContact||"",
+          d.pct != null ? d.pct : "",
+          d.ts ? new Date(d.ts).toISOString() : ""
+        ]);
+      }
+      const csv = rows.map(row => row.map(csvEscape).join(",")).join("\r\n");
+      const blob = new Blob([csv], {type:"text/csv;charset=utf-8;"});
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `matchbooth-${EVENT_ID}-${Date.now()}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }
+
+    function openStaffMenu(){
+      document.getElementById('staffCurrentEvent').textContent = EVENT_ID;
+      document.getElementById('staffEventInput').value = "";
+      document.getElementById('staffOverlay').classList.add('show');
+    }
+    function closeStaffMenu(){ document.getElementById('staffOverlay').classList.remove('show'); }
+
+    document.getElementById('staffMenuLink').addEventListener('click', async ()=>{
+      const pw = await askPassword("Enter the staff password to continue.");
+      if(pw === null) return;
+      if(pw !== "2500"){ await showAlert("Incorrect password."); return; }
+      openStaffMenu();
+    });
+
+    document.getElementById('staffClose').addEventListener('click', closeStaffMenu);
+    document.getElementById('staffOverlay').addEventListener('click', (e)=>{
+      if(e.target.id === 'staffOverlay') closeStaffMenu();
+    });
+
+    document.getElementById('staffSetEventBtn').addEventListener('click', async ()=>{
+      const raw = document.getElementById('staffEventInput').value;
+      const newEventId = sanitizeEventId(raw);
+      if(!raw.trim()){ await showAlert("Enter an event name first."); return; }
+
+      EVENT_ID = newEventId;
+
+      // reflect the new event in the address bar too, so refreshing this booth screen
+      // (or bookmarking it) keeps the same event without staff re-entering it
+      const url = new URL(window.location.href);
+      url.searchParams.set('event', EVENT_ID);
+      history.replaceState(null, '', url.toString());
+
+      renderEventAndQR();
+      document.getElementById('staffCurrentEvent').textContent = EVENT_ID;
+      document.getElementById('staffEventInput').value = "";
+      await showAlert(`Event switched to "${EVENT_ID}". The QR code and staff actions now apply to this event.`);
+    });
+
+    document.getElementById('staffResetBtn').addEventListener('click', async ()=>{
+      const ok = await askConfirm(`Clear the match pool for "${EVENT_ID}"? This removes everyone who has played at this event so far. Other events/booths are not affected.`);
+      if(!ok) return;
+      const keys = await storageList('entry:' + EVENT_ID + ':');
+      for(const k of keys){ await storageDelete(k); }
+      closeStaffMenu();
+      await showAlert("Tonight's match pool has been cleared.");
+    });
+
+    document.getElementById('staffExportBtn').addEventListener('click', async ()=>{
+      await exportEventCSV();
+      closeStaffMenu();
+    });
+
+    document.getElementById('toPhonePreview').addEventListener('click', ()=>{
+      const url = new URL(window.location.href);
+      url.searchParams.set('mode','phone');
+      window.location.href = url.toString();
+    });
+  }
+
+})();
+</script>
+</body>
+</html>
