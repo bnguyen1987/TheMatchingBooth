@@ -468,7 +468,6 @@
       <div class="screen" id="screen-result">
         <div class="ticketsWrap" id="ticketsWrap"></div>
         <div class="actionsRow">
-          <button class="ghost" id="printBtn">🖨️ Print Both Tickets</button>
           <button class="primary" id="nextGuestBtn">Next Guest →</button>
         </div>
       </div>
@@ -485,14 +484,16 @@
       <div class="screen active" id="screen-signup">
         <input class="field" id="nameInput" placeholder="First name" maxlength="20">
 
+        <div class="fieldHint" style="margin:0 0 6px;">Your gender (optional):</div>
         <select class="field" id="genderInput">
-          <option value="">Your gender (optional)</option>
+          <option value="">Prefer not to say</option>
           <option value="Woman">Woman</option>
           <option value="Man">Man</option>
           <option value="Non-binary">Non-binary</option>
         </select>
+        <div class="fieldHint" style="margin:-2px 0 6px;">Show me matches who are:</div>
         <select class="field" id="prefInput">
-          <option value="Everyone">Show me matches who are: Everyone</option>
+          <option value="Everyone">Everyone</option>
           <option value="Woman">Women</option>
           <option value="Man">Men</option>
           <option value="Non-binary">Non-binary</option>
@@ -580,8 +581,12 @@
         <div class="fieldHint" style="margin-top:0;">Current event: <strong id="staffCurrentEvent">default</strong></div>
         <input class="field" id="staffEventInput" placeholder="New event name (e.g. venue-westwood)" maxlength="60">
         <button class="ghost" id="staffSetEventBtn" style="margin-bottom:14px;">Set Event</button>
-        <button class="primary" id="staffResetBtn" style="margin-bottom:10px;">Reset Match Pool</button>
-        <button class="ghost" id="staffExportBtn">Export Event Data (CSV)</button>
+
+        <input class="field" id="staffReprintInput" placeholder="Guest's 6-digit code" maxlength="6" inputmode="numeric">
+        <button class="ghost" id="staffReprintBtn" style="margin-bottom:14px;">Reprint Ticket</button>
+
+        <button class="ghost" id="staffExportBtn" style="margin-bottom:14px;">Export Event Data (CSV)</button>
+        <button class="primary" id="staffResetBtn">Reset Match Pool</button>
       </div>
     </div>
   </div>
@@ -1358,6 +1363,9 @@
         await storageSet('entry:' + EVENT_ID + ':' + bState.code, JSON.stringify(entry));
         renderTicketFromEntry(entry);
         show('screen-result');
+        // auto-print right away instead of waiting for a manual click — give the browser
+        // a brief moment to finish painting the ticket(s) before opening the print dialog
+        setTimeout(()=>{ window.print(); }, 400);
       }, 1600);
     }
 
@@ -1410,8 +1418,6 @@
       wrap.innerHTML = html;
     }
 
-    document.getElementById('printBtn').addEventListener('click', ()=>{ window.print(); });
-
     document.getElementById('nextGuestBtn').addEventListener('click', ()=>{
       resetBoothToHome();
     });
@@ -1456,6 +1462,7 @@
     function openStaffMenu(){
       document.getElementById('staffCurrentEvent').textContent = EVENT_ID;
       document.getElementById('staffEventInput').value = "";
+      document.getElementById('staffReprintInput').value = "";
       document.getElementById('staffOverlay').classList.add('show');
     }
     function closeStaffMenu(){ document.getElementById('staffOverlay').classList.remove('show'); }
@@ -1489,6 +1496,28 @@
       document.getElementById('staffCurrentEvent').textContent = EVENT_ID;
       document.getElementById('staffEventInput').value = "";
       await showAlert(`Event switched to "${EVENT_ID}". The QR code and staff actions now apply to this event.`);
+    });
+
+    document.getElementById('staffReprintBtn').addEventListener('click', async ()=>{
+      const code = document.getElementById('staffReprintInput').value.trim();
+      if(!/^\d{6}$/.test(code)){ await showAlert("Enter a valid 6-digit code."); return; }
+
+      const raw = await storageGet('entry:' + EVENT_ID + ':' + code);
+      if(!raw){ await showAlert(`No entry found for code ${code} in event "${EVENT_ID}".`); return; }
+
+      let entry;
+      try{ entry = JSON.parse(raw); } catch(e){ await showAlert("That entry's data looks corrupted — can't reprint it."); return; }
+
+      if(!entry.photos || !entry.photos.length){
+        await showAlert("This guest hasn't taken their photos yet, so there's no ticket to print.");
+        return;
+      }
+
+      document.getElementById('staffReprintInput').value = "";
+      closeStaffMenu();
+      renderTicketFromEntry(entry);
+      show('screen-result');
+      setTimeout(()=>{ window.print(); }, 400);
     });
 
     document.getElementById('staffResetBtn').addEventListener('click', async ()=>{
